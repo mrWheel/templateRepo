@@ -45,7 +45,7 @@ The template repository is expected to contain shared project assets such as:
 
 - `.github/workflows/`
 - `tools/git-hooks/`
-- `.clangFormat`
+- `.clang-format`
 
 You can change the template repository URL or the copied paths via command-line arguments.
 
