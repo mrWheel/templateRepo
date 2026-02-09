@@ -6,7 +6,7 @@ from pathlib import Path
 # ---------------- CONFIG ----------------
 
 # Extensions to format
-EXTENSIONS = {".c", ".h"}
+EXTENSIONS = {".c", ".cpp", ".h"}
 
 # Directories to skip (relative path fragments)
 SKIP_DIRS = {
