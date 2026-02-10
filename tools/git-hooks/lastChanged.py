@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+#-- Version Date: 09-02-2026 -- (dd-mm-eeyy)
+
 """
 ===============================================================================
 Git pre-commit hook helper: last-changed.py
