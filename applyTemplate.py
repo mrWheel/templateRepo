@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#-- Version Date: 10-02-2026 -- (dd-mm-eeyy)
+#-- Version Date: 09-02-2026 -- (dd-mm-eeyy)
 #
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ TEMPLATE_REPO = "https://github.com/mrWheel/templateRepo"
 DEFAULT_PATHS = [
     ".github/workflows",
     "tools/git-hooks",
-    ".clangFormat",
+    ".clang-format",
 ]
 
 
@@ -377,6 +377,7 @@ def set_hooks_path(repo_root: Path, hooks_path: str) -> None:
     run(["git", "config", "core.hooksPath", hooks_path], cwd=repo_root)
 
 
+"""
 def update_version_date_header(path: Path) -> None:
     # Update:
     #   #-- Version Date: dd-mm-yyyy -- (dd-mm-eeyy)
@@ -387,7 +388,9 @@ def update_version_date_header(path: Path) -> None:
 
     new_text, n = re.subn(
         r"^#-- Version Date:\s*\d{2}-\d{2}-\d{4}\s*--\s*\(dd-mm-eeyy\)\s*$",
+        f"#",
         f"#-- Version Date: {today} -- (dd-mm-eeyy)",
+        f"#",
         text,
         count=1,
         flags=re.MULTILINE,
@@ -398,7 +401,7 @@ def update_version_date_header(path: Path) -> None:
 
     if new_text != text:
         path.write_text(new_text, encoding="utf-8")
-
+"""
 
 def apply_self_update_from_template(
     template_dir: Path,
