@@ -46,6 +46,7 @@ The template repository is expected to contain shared project assets such as:
 - `.github/workflows/`
 - `tools/git-hooks/`
 - `.clang-format`
+- `.codingRules.md`
 
 You can change the template repository URL or the copied paths via command-line arguments.
 
@@ -55,7 +56,7 @@ You can change the template repository URL or the copied paths via command-line 
 
 - Python **3.8+**
 - Git installed and available on your `PATH`
-- Must be executed from the **root of a Git repository**
+- A target project path must be provided as an argument
 
 ---
 
@@ -74,3 +75,28 @@ Make it executable (optional):
 ```bash
 chmod +x applyTemplate.py
 ```
+
+Run it by passing the target project root path:
+
+```bash
+./applyTemplate.py /path/to/your/project
+```
+
+If you run it without a path, it prints a help/usage message.
+
+---
+
+## AI Assistant Usage
+
+This repository includes `.codingRules.md` mainly as instruction input for AI coding assistants.
+
+For every new chat/session, explicitly ask the AI to read and apply `.codingRules.md` before making changes.
+
+Suggested starter prompt:
+
+```text
+Read .codingRules.md first and follow it strictly for all code suggestions and edits in this chat.
+Before changing code, confirm you will apply these rules.
+```
+
+Tip: Re-send this instruction when you start a new chat, switch tools, or notice the assistant drifting from the rules.

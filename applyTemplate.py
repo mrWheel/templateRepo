@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#-- Version Date: 10-02-2026 -- (dd-mm-eeyy)
+#-- Version Date: 25-02-2026 -- (dd-mm-eeyy)
 #
 from __future__ import annotations
 
@@ -20,12 +20,13 @@ from pathlib import Path
 TEMPLATE_REPO = "https://github.com/mrWheel/templateRepo"
 
 
-# Wat je standaard wil “syncen” vanuit de template.
-# Voeg gerust extra paden toe als je templateRepo later groeit.
+# Default paths to sync from the template repository.
+# Add more paths here when the template repository grows.
 DEFAULT_PATHS = [
     ".github/workflows",
     "tools/git-hooks",
     ".clang-format",
+    ".codingRules.md",
 ]
 
 
@@ -52,13 +53,6 @@ def run(cmd: list[str], cwd: Path | None = None) -> str:
             f"STDOUT:\n{p.stdout}\nSTDERR:\n{p.stderr}"
         )
     return p.stdout.strip()
-
-
-def is_git_repo(root: Path) -> bool:
-    return (root / ".git").exists() or (
-        # support worktrees/submodules where .git is a file
-        (root / ".git").is_file()
-    )
 
 
 def _read_text_safe(path: Path) -> str | None:
@@ -427,9 +421,24 @@ def apply_self_update_from_template(
     return True
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     ap = argparse.ArgumentParser(
-        description="Apply mrWheel/templateRepo files to current repo (ask on differences by default) and enable git hooks."
+        description=(
+            "Apply mrWheel/templateRepo files to a target project directory "
+            "(ask on differences by default) and enable git hooks."
+        ),
+        epilog=(
+            "Example:\n"
+            "  ./applyTemplate.py /path/to/project\n"
+            "\n"
+            "If no project path is provided, this script prints help text."
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    ap.add_argument(
+        "project_path",
+        nargs="?",
+        help="Path to the target project root.",
     )
     ap.add_argument(
         "--template",
@@ -469,15 +478,25 @@ def parse_args() -> argparse.Namespace:
         default=".bak",
         help="Suffix for backups when choosing backup+overwrite (default: .bak)",
     )
-    return ap.parse_args()
+    return ap, ap.parse_args()
 
 
 def main() -> int:
-    args = parse_args()
-    repo_root = Path.cwd()
+    parser, args = parse_args()
 
-    if not is_git_repo(repo_root):
-        print("Error: This does not look like a git repo root (no .git found). Run from the repo root.", file=sys.stderr)
+    if not args.project_path:
+        print("Template Repo Applier")
+        print("")
+        print("This script applies shared template files to a target project directory.")
+        print("It copies configured paths from the template repo and enables Git hooks.")
+        print("")
+        parser.print_help()
+        return 1
+
+    repo_root = Path(args.project_path).expanduser().resolve()
+
+    if not repo_root.exists() or not repo_root.is_dir():
+        print(f"Error: Project path does not exist or is not a directory: {repo_root}", file=sys.stderr)
         return 2
 
     # Check that git exists
@@ -542,8 +561,14 @@ def main() -> int:
     hooks_dir = repo_root / args.hooks_path
     if hooks_dir.exists():
         ensure_exec_bits(hooks_dir)
-        set_hooks_path(repo_root, args.hooks_path)
-        print(f"Git hooks enabled: core.hooksPath = {args.hooks_path}")
+        try:
+            set_hooks_path(repo_root, args.hooks_path)
+            print(f"Git hooks enabled: core.hooksPath = {args.hooks_path}")
+        except Exception as e:
+            print(
+                f"Warning: Could not set core.hooksPath in target project ({e}).",
+                file=sys.stderr,
+            )
     else:
         print(f"Warning: Hooks directory not found ({args.hooks_path}); core.hooksPath not set.", file=sys.stderr)
 
