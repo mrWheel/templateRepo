@@ -30,6 +30,7 @@ This is useful for enforcing shared tooling such as:
 3. Skips any file that already exists
 4. Makes Git hooks executable (on POSIX systems)
 5. Configures Git to use the template’s hooks directory
+6. Ensures `createProjectStructure.py` is executable when present
 
 ---
 
@@ -47,6 +48,7 @@ The template repository is expected to contain shared project assets such as:
 - `tools/git-hooks/`
 - `.clang-format`
 - `.codingRules.md`
+- `createProjectStructure.py`
 
 You can change the template repository URL or the copied paths via command-line arguments.
 

@@ -27,6 +27,7 @@ DEFAULT_PATHS = [
     "tools/git-hooks",
     ".clang-format",
     ".codingRules.md",
+    "createProjectStructure.py",
 ]
 
 
@@ -376,6 +377,17 @@ def ensure_exec_bits(hooks_dir: Path) -> None:
                 pass
 
 
+def ensure_executable(path: Path) -> None:
+    if not path.exists() or not path.is_file():
+        return
+
+    try:
+        mode = path.stat().st_mode
+        path.chmod(mode | 0o111)
+    except Exception:
+        pass
+
+
 def set_hooks_path(repo_root: Path, hooks_path: str) -> None:
     # Set hooks path (relative is fine).
     run(["git", "config", "core.hooksPath", hooks_path], cwd=repo_root)
@@ -586,6 +598,8 @@ def main() -> int:
             )
     else:
         print(f"Warning: Hooks directory not found ({args.hooks_path}); core.hooksPath not set.", file=sys.stderr)
+
+    ensure_executable(repo_root / "createProjectStructure.py")
 
     # Also update this file's header date even if only hooks/workflows changed
     #-x-update_version_date_header(repo_root / "applyTemplate.py")
