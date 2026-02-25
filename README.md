@@ -50,6 +50,17 @@ The template repository is expected to contain shared project assets such as:
 
 You can change the template repository URL or the copied paths via command-line arguments.
 
+For `.github/workflows/tag-release.yml`, the workflow extracts only a semantic
+version token in the form `vX.Y.Z` from `PROG_VERSION` in your source file.
+Additional text around that token is allowed, as long as the `vX.Y.Z` part exists.
+
+When `tag-release.yml` already exists in the target project and is overwritten by
+the template version, these existing target values are preserved automatically:
+
+- `PROGRAM_NAME`
+- `PROGRAM_SRC`
+- `PROGRAM_DIR`
+
 ---
 
 ## Requirements
@@ -83,6 +94,16 @@ Run it by passing the target project root path:
 ```
 
 If you run it without a path, it prints a help/usage message.
+
+When a file already exists in the target directory and `--on-existing ask` is used,
+the script prompts with:
+
+- `O` = overwrite
+- `K` = keep existing file
+- `D` = show diff (then ask again)
+- `Q` = quit the script immediately
+
+Input is case-insensitive (`o/k/d/q` also works).
 
 ---
 
