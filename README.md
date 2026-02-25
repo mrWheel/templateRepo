@@ -107,19 +107,3 @@ the script prompts with:
 
 Input is case-insensitive (`o/k/d/q` also works).
 
----
-
-## AI Assistant Usage
-
-This repository includes `.codingRules.md` mainly as instruction input for AI coding assistants.
-
-For every new chat/session, explicitly ask the AI to read and apply `.codingRules.md` before making changes.
-
-Suggested starter prompt:
-
-```text
-Read .codingRules.md first and follow it strictly for all code suggestions and edits in this chat.
-Before changing code, confirm you will apply these rules.
-```
-
-Tip: Re-send this instruction when you start a new chat, switch tools, or notice the assistant drifting from the rules.
