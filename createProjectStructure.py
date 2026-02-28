@@ -11,7 +11,7 @@ import os
 import urllib.request
 from pathlib import Path
 
-scriptVersion = "v1.1 (2026-02-24)"
+scriptVersion = "v2.1 (2026-02-28)"
 defaultAwsServer = "admin@aandewiel.nl"
 defaultAwsTarget = "/home/admin/flasherWebsite_v3"
 defaultAwsSshKey = "~/.ssh/LightsailDefaultKey-eu-central-1.pem"
@@ -22,6 +22,7 @@ envSectionPattern = re.compile(r"^\s*\[\s*env:([^\]]+)\s*\]\s*$")
 semverPattern = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 versionWithPrefixPattern = re.compile(r"[vV](\d+\.\d+\.\d+)")
 workspaceDirPattern = re.compile(r"^\s*workspace_dir\s*=\s*(.+?)\s*$", re.IGNORECASE)
+fsStartPattern = re.compile(r"_FS_start\s*=\s*(0x[0-9a-fA-F]+|\d+)")
 
 
 def parsePlatformioSections(platformioIni: Path) -> dict[str, dict[str, str]]:
@@ -81,10 +82,60 @@ def resolveEnvBoardName(sections: dict[str, dict[str, str]], envName: str) -> st
     return sanitizePathSegment(envName)
 
 
+def resolveEnvPlatformName(
+    sections: dict[str, dict[str, str]], envName: str
+) -> str | None:
+    configuredPlatform = getEnvConfigValue(sections, envName, "platform")
+    if configuredPlatform:
+        return configuredPlatform.strip().lower()
+    return None
+
+
+def detectSocFamily(boardName: str, platformName: str | None) -> str:
+    normalizedBoard = re.sub(r"[^a-z0-9]", "", (boardName or "").lower())
+    normalizedPlatform = re.sub(r"[^a-z0-9]", "", (platformName or "").lower())
+
+    esp8266BoardAliases = {
+        "d1mini",
+        "d1mini32",
+        "d1minipro",
+        "nodemcu",
+        "nodemcuv2",
+        "esp01",
+        "esp01s",
+        "esp12e",
+        "esp12f",
+        "esp07",
+        "esp07s",
+        "esp8285",
+    }
+
+    if (
+        "esp8266" in normalizedBoard
+        or "esp8266" in normalizedPlatform
+        or "8266" in normalizedBoard
+        or "8266" in normalizedPlatform
+        or normalizedBoard in esp8266BoardAliases
+    ):
+        return "esp8266"
+
+    return "esp32"
+
+
 def resolveEnvPartitionsSource(
-    projectRoot: Path, sections: dict[str, dict[str, str]], envName: str
+    projectRoot: Path,
+    sections: dict[str, dict[str, str]],
+    envName: str,
+    socFamily: str,
 ) -> Path | None:
-    configuredValue = getEnvConfigValue(sections, envName, "board_build.partitions")
+    configuredValue = None
+    envSection = f"env:{envName}".lower()
+
+    if socFamily == "esp8266":
+        envValues = sections.get(envSection, {})
+        configuredValue = envValues.get("board_build.partitions")
+    else:
+        configuredValue = getEnvConfigValue(sections, envName, "board_build.partitions")
 
     candidates: list[Path] = []
     if configuredValue:
@@ -98,12 +149,63 @@ def resolveEnvPartitionsSource(
             resolved = resolved.resolve()
         candidates.append(resolved)
 
-    defaultCandidate = (projectRoot / "partitions.csv").resolve()
-    candidates.append(defaultCandidate)
+    if socFamily == "esp32":
+        defaultCandidate = (projectRoot / "partitions.csv").resolve()
+        candidates.append(defaultCandidate)
 
     for candidate in candidates:
         if candidate.exists() and candidate.is_file():
             return candidate
+
+    return None
+
+
+def resolveEnvLdscriptSource(
+    projectRoot: Path,
+    sections: dict[str, dict[str, str]],
+    envName: str,
+    socFamily: str,
+) -> Path | None:
+    if socFamily != "esp8266":
+        return None
+
+    configuredValue = getEnvConfigValue(sections, envName, "board_build.ldscript")
+    if not configuredValue:
+        return None
+
+    cleaned = configuredValue.strip().strip('"').strip("'")
+    cleaned = cleaned.replace("${PROJECT_DIR}", str(projectRoot))
+    cleaned = cleaned.replace("$PROJECT_DIR", str(projectRoot))
+    resolved = Path(cleaned).expanduser()
+    if not resolved.is_absolute():
+        resolved = (projectRoot / resolved).resolve()
+    else:
+        resolved = resolved.resolve()
+
+    if resolved.exists() and resolved.is_file():
+        return resolved
+
+    return None
+
+
+def resolveGeneratedEsp8266Ldscript(buildDir: Path) -> Path | None:
+    ldDir = buildDir / "ld"
+    if not ldDir.exists() or not ldDir.is_dir():
+        return None
+
+    preferredNames = [
+        "local.eagle.app.v6.common.ld",
+        "eagle.app.v6.common.ld",
+    ]
+
+    for name in preferredNames:
+        candidate = ldDir / name
+        if candidate.exists() and candidate.is_file():
+            return candidate
+
+    for child in sorted(ldDir.iterdir()):
+        if child.is_file() and child.suffix == ".ld":
+            return child
 
     return None
 
@@ -135,15 +237,34 @@ def parsePartitionsCsv(partitionsCsvPath: Path) -> dict[str, dict[str, str]]:
     return partitions
 
 
-def detectFirmwareOffset(partitions: dict[str, dict[str, str]]) -> str:
+def detectFirmwareOffset(partitions: dict[str, dict[str, str]], socFamily: str) -> str:
+    if socFamily == "esp8266":
+        firmwareEntry = partitions.get("firmware") if isinstance(partitions, dict) else None
+        if firmwareEntry and firmwareEntry.get("offset"):
+            return firmwareEntry["offset"]
+        return "0x00000"
+
     if "factory" in partitions and partitions["factory"].get("offset"):
         return partitions["factory"]["offset"]
     if "app0" in partitions and partitions["app0"].get("offset"):
         return partitions["app0"]["offset"]
+    if "ota_0" in partitions and partitions["ota_0"].get("offset"):
+        return partitions["ota_0"]["offset"]
+    if "firmware" in partitions and partitions["firmware"].get("offset"):
+        return partitions["firmware"]["offset"]
 
     for part in partitions.values():
-        if part.get("type") == "app" and part.get("offset"):
+        partType = str(part.get("type") or "").strip().lower()
+        partSubtype = str(part.get("subtype") or "").strip().lower()
+
+        if partType in {"app", "0", "0x00"} and part.get("offset"):
             return part["offset"]
+
+        if partSubtype in {"factory", "app0", "ota_0", "ota0"} and part.get("offset"):
+            return part["offset"]
+
+    if socFamily == "esp8266":
+        return "0x00000"
 
     return "0x10000"
 
@@ -162,13 +283,42 @@ def detectFilesystemOffset(partitions: dict[str, dict[str, str]]) -> str | None:
     return None
 
 
+def detectEsp8266FilesystemOffsetFromLdscript(ldscriptPath: Path) -> str | None:
+    if not ldscriptPath.exists() or not ldscriptPath.is_file():
+        return None
+
+    content = ldscriptPath.read_text(encoding="utf-8", errors="ignore")
+    match = fsStartPattern.search(content)
+    if not match:
+        return None
+
+    rawValue = match.group(1)
+    try:
+        numericValue = int(rawValue, 0)
+    except ValueError:
+        return None
+
+    if numericValue >= 0x40200000:
+        numericValue = numericValue - 0x40200000
+
+    if numericValue < 0:
+        return None
+
+    return f"0x{numericValue:05X}"
+
+
 def isEsp32S3Board(boardName: str) -> bool:
     normalized = re.sub(r"[^a-z0-9]", "", boardName.lower())
     return "esp32s3" in normalized
 
 
 def generateFlashJson(
-    targetVersionDir: Path, boardName: str, version: str, logLines: list[str]
+    targetVersionDir: Path,
+    boardName: str,
+    version: str,
+    socFamily: str,
+    ldscriptSource: Path | None,
+    logLines: list[str],
 ) -> None:
     partitionsCsvPath = targetVersionDir / "partitions.csv"
     partitions: dict[str, dict[str, str]] = {}
@@ -180,23 +330,24 @@ def generateFlashJson(
             logLines.append(f"WARN: partitions.csv parse failed: {exc}")
 
     flashFiles: list[dict[str, str]] = []
-    bootloaderOffset = "0x0000" if isEsp32S3Board(boardName) else "0x1000"
+    if socFamily == "esp32":
+        bootloaderOffset = "0x0000" if isEsp32S3Board(boardName) else "0x1000"
 
-    bootloaderPath = targetVersionDir / "bootloader.bin"
-    if bootloaderPath.exists():
-        flashFiles.append({"offset": bootloaderOffset, "file": "bootloader.bin"})
+        bootloaderPath = targetVersionDir / "bootloader.bin"
+        if bootloaderPath.exists():
+            flashFiles.append({"offset": bootloaderOffset, "file": "bootloader.bin"})
 
-    partitionsBinPath = targetVersionDir / "partitions.bin"
-    if partitionsBinPath.exists():
-        flashFiles.append({"offset": "0x8000", "file": "partitions.bin"})
+        partitionsBinPath = targetVersionDir / "partitions.bin"
+        if partitionsBinPath.exists():
+            flashFiles.append({"offset": "0x8000", "file": "partitions.bin"})
 
-    bootAppPath = targetVersionDir / "boot_app0.bin"
-    if bootAppPath.exists():
-        flashFiles.append({"offset": "0xe000", "file": "boot_app0.bin"})
+        bootAppPath = targetVersionDir / "boot_app0.bin"
+        if bootAppPath.exists():
+            flashFiles.append({"offset": "0xe000", "file": "boot_app0.bin"})
 
     firmwarePath = targetVersionDir / "firmware.bin"
     if firmwarePath.exists():
-        firmwareOffset = detectFirmwareOffset(partitions)
+        firmwareOffset = detectFirmwareOffset(partitions, socFamily)
         flashFiles.append({"offset": firmwareOffset, "file": "firmware.bin"})
 
     filesystemFile = None
@@ -207,6 +358,17 @@ def generateFlashJson(
 
     if filesystemFile:
         filesystemOffset = detectFilesystemOffset(partitions)
+        if not filesystemOffset and socFamily == "esp8266" and ldscriptSource:
+            filesystemOffset = detectEsp8266FilesystemOffsetFromLdscript(ldscriptSource)
+            if filesystemOffset:
+                logLines.append(f"Derived filesystem offset from ldscript: {filesystemOffset}")
+
+        if not filesystemOffset and socFamily == "esp8266":
+            filesystemOffset = "0x300000"
+            logLines.append(
+                "WARN: Falling back to default ESP8266 filesystem offset 0x300000"
+            )
+
         if filesystemOffset:
             flashFiles.append({"offset": filesystemOffset, "file": filesystemFile})
         else:
@@ -216,6 +378,7 @@ def generateFlashJson(
 
     flashPayload = {
         "board": boardName,
+        "soc": socFamily,
         "version": version,
         "flash_files": flashFiles,
     }
@@ -414,12 +577,20 @@ def collectAndCopyArtifacts(
     workspaceDir: Path,
     envName: str,
     boardName: str,
+    socFamily: str,
     targetVersionDir: Path,
     envPartitionsSource: Path | None,
+    envLdscriptSource: Path | None,
     version: str,
     logLines: list[str],
 ) -> None:
     buildDir = discoverBuildDir(projectRoot, workspaceDir, envName)
+    effectiveLdscriptSource = envLdscriptSource
+
+    if socFamily == "esp8266" and not effectiveLdscriptSource:
+        effectiveLdscriptSource = resolveGeneratedEsp8266Ldscript(buildDir)
+        if effectiveLdscriptSource:
+            logLines.append(f"Using generated ldscript source: {effectiveLdscriptSource}")
 
     required = buildDir / "firmware.bin"
     if not required.exists():
@@ -441,6 +612,11 @@ def collectAndCopyArtifacts(
         shutil.copy2(envPartitionsSource, targetPartitionsCsv)
         logLines.append(f"Using partitions source: {envPartitionsSource}")
 
+    if effectiveLdscriptSource and effectiveLdscriptSource.exists():
+        shutil.copy2(effectiveLdscriptSource, targetVersionDir / "ldscript.ld")
+        if envLdscriptSource and envLdscriptSource.exists():
+            logLines.append(f"Using ldscript source: {envLdscriptSource}")
+
     fsCandidates = [
         ("spiffs.bin", "spiffs.bin"),
         ("littlefs.bin", "LittleFS.bin"),
@@ -450,7 +626,14 @@ def collectAndCopyArtifacts(
         if copyIfExists(buildDir / sourceName, targetVersionDir / destName):
             break
 
-    generateFlashJson(targetVersionDir, boardName, version, logLines)
+    generateFlashJson(
+        targetVersionDir,
+        boardName,
+        version,
+        socFamily,
+        effectiveLdscriptSource,
+        logLines,
+    )
 
     buildLogPath = targetVersionDir / "build_log.md"
     now = dt.datetime.now().isoformat(timespec="seconds")
@@ -750,10 +933,14 @@ def main() -> int:
         raise SystemExit("No [env:...] sections found in platformio.ini")
 
     envBoardMap: dict[str, str] = {}
+    envSocMap: dict[str, str] = {}
     boardCounts: dict[str, int] = {}
     for env in envs:
         boardName = resolveEnvBoardName(platformioSections, env)
+        platformName = resolveEnvPlatformName(platformioSections, env)
+        socFamily = detectSocFamily(boardName, platformName)
         envBoardMap[env] = boardName
+        envSocMap[env] = socFamily
         boardCounts[boardName] = boardCounts.get(boardName, 0) + 1
 
     version = detectVersion(projectPath / "src")
@@ -774,12 +961,13 @@ def main() -> int:
     print(f"Environments: {', '.join(envs)}")
     print("Boards per environment:")
     for env in envs:
-        print(f"  - {env} -> {envBoardMap[env]}")
+        print(f"  - {env} -> {envBoardMap[env]} ({envSocMap[env]})")
     print(f"Output: {targetProjectDir}")
     print(f"Workspace dir: {workspaceDir}")
 
     for env in envs:
         boardName = envBoardMap[env]
+        socFamily = envSocMap[env]
         if boardCounts[boardName] > 1:
             envVersionDir = targetProjectDir / env / boardName / version
         else:
@@ -795,15 +983,28 @@ def main() -> int:
             except RuntimeError as exc:
                 logLines.append(f"WARN: buildfs niet gelukt voor {env}: {exc}")
 
-        envPartitionsSource = resolveEnvPartitionsSource(projectPath, platformioSections, env)
+        envPartitionsSource = resolveEnvPartitionsSource(
+            projectPath,
+            platformioSections,
+            env,
+            socFamily,
+        )
+        envLdscriptSource = resolveEnvLdscriptSource(
+            projectPath,
+            platformioSections,
+            env,
+            socFamily,
+        )
 
         collectAndCopyArtifacts(
             projectPath,
             workspaceDir,
             env,
             boardName,
+            socFamily,
             envVersionDir,
             envPartitionsSource,
+            envLdscriptSource,
             version,
             logLines,
         )
