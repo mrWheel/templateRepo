@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#-- Version Date: 25-02-2026 -- (dd-mm-eeyy)
+#-- Version Date: 01-03-2026 -- (dd-mm-eeyy)
 #
 from __future__ import annotations
 
@@ -388,6 +388,27 @@ def ensure_executable(path: Path) -> None:
         pass
 
 
+def ensure_pre_commit_hook(template_dir: Path, repo_root: Path, hooks_path: str) -> bool:
+    src_pre_commit = template_dir / "tools/git-hooks/pre-commit"
+    dst_pre_commit = repo_root / hooks_path / "pre-commit"
+
+    if not src_pre_commit.exists() or not src_pre_commit.is_file():
+        print(
+            "Warning: Template pre-commit hook not found at tools/git-hooks/pre-commit.",
+            file=sys.stderr,
+        )
+        return False
+
+    dst_pre_commit.parent.mkdir(parents=True, exist_ok=True)
+
+    if not dst_pre_commit.exists():
+        shutil.copy2(src_pre_commit, dst_pre_commit)
+        print(f"Installed hook file: {hooks_path}/pre-commit")
+
+    ensure_executable(dst_pre_commit)
+    return dst_pre_commit.exists()
+
+
 def set_hooks_path(repo_root: Path, hooks_path: str) -> None:
     # Set hooks path (relative is fine).
     run(["git", "config", "core.hooksPath", hooks_path], cwd=repo_root)
@@ -521,6 +542,7 @@ def main() -> int:
         return 2
 
     self_updated = False
+    pre_commit_ready = False
 
     try:
         template_candidate = Path(args.template).expanduser()
@@ -577,6 +599,12 @@ def main() -> int:
         )
         if self_updated:
             print("applyTemplate.py was updated from template.")
+
+        pre_commit_ready = ensure_pre_commit_hook(
+            template_dir=template_dir,
+            repo_root=repo_root,
+            hooks_path=args.hooks_path,
+        )
     except UserQuitRequested:
         print("Aborted by user.")
         return 130
@@ -586,7 +614,7 @@ def main() -> int:
 
     # Enable hooks
     hooks_dir = repo_root / args.hooks_path
-    if hooks_dir.exists():
+    if hooks_dir.exists() and pre_commit_ready:
         ensure_exec_bits(hooks_dir)
         try:
             set_hooks_path(repo_root, args.hooks_path)
@@ -597,7 +625,10 @@ def main() -> int:
                 file=sys.stderr,
             )
     else:
-        print(f"Warning: Hooks directory not found ({args.hooks_path}); core.hooksPath not set.", file=sys.stderr)
+        print(
+            f"Warning: Hook activation skipped. Ensure {args.hooks_path}/pre-commit exists.",
+            file=sys.stderr,
+        )
 
     ensure_executable(repo_root / "createProjectStructure.py")
 

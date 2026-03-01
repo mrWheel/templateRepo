@@ -1,6 +1,6 @@
 # -------------------------------------------------------------------------------
 #
-#-- Version Date: 25-02-2026 -- (dd-mm-eeyy)
+#-- Version Date: 01-03-2026 -- (dd-mm-eeyy)
 #
 # GitHub Actions workflow: Auto tag and manage GitHub Releases based on a version
 # string found in your PlatformIO firmware source file.
@@ -8,7 +8,7 @@
 # Intended use
 # - PlatformIO/embedded projects where the firmware version is defined in source
 #   code (example format below).
-# - On every push to the main branch, the workflow reads the version, compares it
+# - On every push to the main/master branch, the workflow reads the version, compares it
 #   to the latest existing semver tag (vX.Y.Z), and (if newer) creates a new tag.
 #
 # Version format expected in source file
@@ -64,6 +64,7 @@ on:
   push:
     branches:
       - main
+      - master
 
 jobs:
   tag:
