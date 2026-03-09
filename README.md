@@ -56,12 +56,20 @@ For `.github/workflows/tag-release.yml`, the workflow extracts only a semantic
 version token in the form `vX.Y.Z` from `PROG_VERSION` in your source file.
 Additional text around that token is allowed, as long as the `vX.Y.Z` part exists.
 
-When `tag-release.yml` already exists in the target project and is overwritten by
-the template version, these existing target values are preserved automatically:
+When `.github/workflows/tag-release.yml` is copied or overwritten, the script
+prompts at runtime for these values and writes them into the file:
 
 - `PROGRAM_NAME`
 - `PROGRAM_SRC`
 - `PROGRAM_DIR`
+
+If you press Enter on a prompt, the current value is kept as default.
+Without an interactive TTY, placeholders are not prompted; on overwrite the
+existing values are preserved, and on first copy the template placeholders remain.
+
+When comparing existing files, differences in only these three values in
+`.github/workflows/tag-release.yml` are treated as no-op (not flagged as a
+meaningful difference).
 
 ---
 

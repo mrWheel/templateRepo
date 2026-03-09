@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#-- Version Date: 01-03-2026 -- (dd-mm-eeyy)
+#-- Version Date: 09-03-2026 -- (dd-mm-eeyy)
 #
 from __future__ import annotations
 
@@ -48,6 +48,13 @@ TAG_RELEASE_ENV_KEYS = [
     "PROGRAM_SRC",
     "PROGRAM_DIR",
 ]
+
+
+TAG_RELEASE_ENV_PROMPTS = {
+    "PROGRAM_NAME": "Program/project name",
+    "PROGRAM_SRC": "Main source file (e.g. main.cpp)",
+    "PROGRAM_DIR": "Source directory (e.g. src)",
+}
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> str:
@@ -127,15 +134,115 @@ def _merge_tag_release_env_values(template_text: str, existing_text: str) -> str
     return "".join(merged_lines)
 
 
+def _extract_tag_release_env_values(text: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for key in TAG_RELEASE_ENV_KEYS:
+        m = re.search(rf"^\s*{key}\s*:\s*(.*)$", text, flags=re.MULTILINE)
+        if m:
+            values[key] = m.group(1).strip()
+    return values
+
+
+def _strip_yaml_outer_quotes(value: str) -> str:
+    stripped = value.strip()
+    if len(stripped) >= 2 and (
+        (stripped.startswith('"') and stripped.endswith('"'))
+        or (stripped.startswith("'") and stripped.endswith("'"))
+    ):
+        return stripped[1:-1]
+    return stripped
+
+
+def _yaml_double_quote(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _prompt_tag_release_env_values(
+    template_text: str,
+    existing_text: str | None,
+) -> dict[str, str] | None:
+    if not sys.stdin.isatty():
+        return None
+
+    template_values = _extract_tag_release_env_values(template_text)
+    existing_values = _extract_tag_release_env_values(existing_text) if existing_text else {}
+
+    print("")
+    print("Configure .github/workflows/tag-release.yml values:")
+
+    prompted: dict[str, str] = {}
+    for key in TAG_RELEASE_ENV_KEYS:
+        default_raw = existing_values.get(key, template_values.get(key, ""))
+        default_value = _strip_yaml_outer_quotes(default_raw)
+        prompt_label = TAG_RELEASE_ENV_PROMPTS.get(key, key)
+        user_value = input(f"  {key} ({prompt_label}) [{default_value}]: ").strip()
+        prompted[key] = user_value if user_value else default_value
+
+    return prompted
+
+
+def _apply_tag_release_env_values(template_text: str, values: dict[str, str]) -> str:
+    output = template_text
+    for key in TAG_RELEASE_ENV_KEYS:
+        if key not in values:
+            continue
+        output = re.sub(
+            rf"^(\s*{key}\s*:\s*).*$",
+            rf"\1{_yaml_double_quote(values[key])}",
+            output,
+            flags=re.MULTILINE,
+        )
+    return output
+
+
+def _normalize_tag_release_for_compare(text: str) -> str:
+    normalized = text
+    for key in TAG_RELEASE_ENV_KEYS:
+        normalized = re.sub(
+            rf"^(\s*{key}\s*:\s*).*$",
+            rf"\1\"<normalized>\"",
+            normalized,
+            flags=re.MULTILINE,
+        )
+    return normalized
+
+
 def _copy_file_with_special_handling(src: Path, dst: Path) -> bool:
-    if not dst.exists() or not _is_tag_release_yml(src) or not _is_tag_release_yml(dst):
+    if not _is_tag_release_yml(src) or not _is_tag_release_yml(dst):
         shutil.copy2(src, dst)
         return True
 
     template_text = _read_text_safe(src)
-    existing_text = _read_text_safe(dst)
+    existing_text = _read_text_safe(dst) if dst.exists() else None
 
-    if template_text is None or existing_text is None:
+    if template_text is None:
+        shutil.copy2(src, dst)
+        return True
+
+    prompted_values = _prompt_tag_release_env_values(template_text, existing_text)
+    if prompted_values is not None:
+        merged_text = _apply_tag_release_env_values(template_text, prompted_values)
+        if existing_text is not None and merged_text == existing_text:
+            print(
+                "Info: No effective content changes after prompting "
+                "PROGRAM_NAME/PROGRAM_SRC/PROGRAM_DIR in .github/workflows/tag-release.yml."
+            )
+            return False
+
+        dst.write_text(merged_text, encoding="utf-8")
+        shutil.copystat(src, dst)
+        print(
+            "Info: Updated PROGRAM_NAME/PROGRAM_SRC/PROGRAM_DIR values "
+            "in .github/workflows/tag-release.yml from runtime input."
+        )
+        return True
+
+    if existing_text is None:
+        print(
+            "Warning: No interactive TTY detected; copying .github/workflows/tag-release.yml "
+            "without replacing PROGRAM_NAME/PROGRAM_SRC/PROGRAM_DIR placeholders."
+        )
         shutil.copy2(src, dst)
         return True
 
@@ -189,6 +296,14 @@ def make_unified_diff(src: Path, dst: Path) -> str:
 
 def files_differ(src: Path, dst: Path, compare: str) -> bool:
     # dst is assumed to exist
+    if _is_tag_release_yml(src) and _is_tag_release_yml(dst):
+        src_text = _read_text_safe(src)
+        dst_text = _read_text_safe(dst)
+        if src_text is not None and dst_text is not None:
+            src_norm = _normalize_tag_release_for_compare(src_text)
+            dst_norm = _normalize_tag_release_for_compare(dst_text)
+            return src_norm != dst_norm
+
     if compare == "size":
         return src.stat().st_size != dst.stat().st_size
 
@@ -304,7 +419,7 @@ def copy_tree_with_policy(
             return
 
         # If file content is identical, never prompt or overwrite.
-        if _calc_sha256_for_compare(srcFile) == _calc_sha256_for_compare(dstFile):
+        if not files_differ(srcFile, dstFile, compare):
             skipped += 1
             return
 
