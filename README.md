@@ -52,9 +52,9 @@ The template repository is expected to contain shared project assets such as:
 
 You can change the template repository URL or the copied paths via command-line arguments.
 
-For `.github/workflows/tag-release.yml`, the workflow extracts only a semantic
-version token in the form `vX.Y.Z` from `PROG_VERSION` in your source file.
-Additional text around that token is allowed, as long as the `vX.Y.Z` part exists.
+For `.github/workflows/tag-release.yml`, the workflow extracts a semantic
+version token in the form `X.Y.Z` or `vX.Y.Z` from `PROG_VERSION` in your source file.
+Additional text around that token is allowed, as long as one of those forms exists.
 
 When `.github/workflows/tag-release.yml` is copied or overwritten, the script
 prompts at runtime for these values and writes them into the file:
