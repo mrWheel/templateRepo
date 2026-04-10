@@ -28,6 +28,7 @@ DEFAULT_PATHS = [
     ".clang-format",
     ".codingRules.md",
     "createProjectStructure.py",
+    "createProjectStructure.md",
 ]
 
 
