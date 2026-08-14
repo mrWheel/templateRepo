@@ -1,0 +1,7 @@
+{
+  "aws_server": "<user>@yourServer>",
+  "aws_target": "<targetDirectory on the serevr>",
+  "aws_ssh_key": "~/.ssh/<yourServerPemFile>.pem",
+  "project_image_url": "<URL to your flasheProject.png>"
+
+}

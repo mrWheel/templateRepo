@@ -14,7 +14,7 @@ import os
 import urllib.request
 from pathlib import Path
 
-scriptVersion = "v2.7 (2026-08-12)"
+scriptVersion = "v2.8 (2026-08-14)"
 configFilePath = Path("~/.ssh/createProjectStructure.json").expanduser()
 defaultsMarkerName = ".createProjectStructure-defaults.json"
 
@@ -449,9 +449,20 @@ def getWorkspaceDir(platformioIni: Path, projectPath: Path) -> Path:
 
 def loadPrivateConfig(requiredKeys: list[str]) -> dict[str, str]:
     if not configFilePath.is_file():
+        templatePath = Path(".createProjectStructure-defaults.json").resolve()
+        examplePayload = {
+            "aws_server": "<user>@yourServer>",
+            "aws_target": "<targetDirectory on the server>",
+            "aws_ssh_key": "~/.ssh/<yourServerPemFile>.pem",
+            "project_image_url": "<URL to your flasherProject.png>",
+        }
         raise RuntimeError(
             f"Private configuration file not found: {configFilePath}\n"
-            "Create it as JSON with the required keys: " + ", ".join(requiredKeys)
+            "Create it as JSON with the layout shown in "
+            f"{templatePath}\n"
+            "Required keys: " + ", ".join(requiredKeys) + "\n"
+            "Example:\n"
+            + json.dumps(examplePayload, indent=2)
         )
     try:
         payload = json.loads(configFilePath.read_text(encoding="utf-8"))
@@ -645,7 +656,7 @@ def validateProjectMetaData(metaDataDir: Path) -> None:
 
 def copyProjectMetaData(metaDataDir: Path, targetProjectDir: Path) -> None:
     for item in sorted(metaDataDir.iterdir()):
-        if not item.is_file() or item.name == defaultsMarkerName:
+        if not item.is_file():
             continue
 
         destinationName = item.name
