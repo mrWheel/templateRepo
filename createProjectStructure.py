@@ -484,6 +484,7 @@ def detectVersion(projectPath: Path) -> str:
         projectPath / "src" / "main.c",
         projectPath / "main" / "main.cpp",
         projectPath / "main" / "main.c",
+        projectPath / "main" / "app_main.c",
         projectPath / "main.cpp",
         projectPath / "main.c",
     ]

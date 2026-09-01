@@ -43,6 +43,7 @@ It checks in this order:
 - `src/main.c`
 - `main/main.cpp`
 - `main/main.c`
+- `main/app_main.c`
 - `main.cpp`
 - `main.c`
 - any `*/main.cpp`
