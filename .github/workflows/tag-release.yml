@@ -56,9 +56,9 @@
 name: Auto Tag Release
 
 env:
-  PROGRAM_NAME: "esp32s3-retro"
-  PROGRAM_SRC: "main.c"
-  PROGRAM_DIR: "main"
+  PROGRAM_NAME: "<program-name>"
+  PROGRAM_SRC: "<main.cpp>"
+  PROGRAM_DIR: "<src>"
 
 on:
   push:
