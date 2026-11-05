@@ -8,6 +8,9 @@
 .vscode/launch.json
 .vscode/ipch/
 
+# --- Claude Code ---
+.claude/
+
 # --- macOS ---
 .DS_Store
 
