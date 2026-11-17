@@ -566,20 +566,23 @@ def ensureProjectMetaDataDefaults(rootDir: Path) -> Path:
     metaDataDir.mkdir(parents=True, exist_ok=True)
 
     (metaDataDir / "project_en.md").write_text(
-        "# your_project_name\n\nDiscription in English\n", encoding="utf-8"
+        "# your_project_name\n\nAdd here a text of approximately 500 words explaining this project in English.\n", encoding="utf-8"
     )
     (metaDataDir / "project_nl.md").write_text(
-        "# your_project_name\n\nBeschrijving van het project in Dutch\n", encoding="utf-8"
+        "# your_project_name\n\nVoeg hier een tekst van ongeveer 500 woorden in die dit project in het Nederlands uitlegt.\n", encoding="utf-8"
     )
 
     payload = {
         "name": "your_project_name",
-        "long_name_nl": "Langere naam in Dutch",
-        "long_name_en": "longer name in English",
-        "description_en": "Discription in English",
-        "description_nl": "Beschrijving van het project in Dutch",
+        "long_name_nl": "Langere naam van uw project in het Nederlands",
+        "long_name_en": "Longer name of your project in English",
+        "description_en": "Add here a description of approximately 500 words explaining this project in English",
+        "description_nl": "Voeg hier een beschrijving van ongeveer 500 woorden in die dit project in het Nederlands uitlegt",
         "github_url": "https://github.com/mrWheel/",
         "post_url": "https://willem.aandewiel.nl/",
+        "version": "1.0.0",
+        "author": "Your Name",
+        "license": "MIT",
         "image": "thisProject.png",
     }
     (metaDataDir / "project.json").write_text(

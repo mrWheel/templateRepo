@@ -34,6 +34,7 @@ DEFAULT_PATHS = [
     ".codingRules.md",
     "createProjectStructure.py",
     "createProjectStructure.md",
+    "projectMetaData",
 ]
 
 
