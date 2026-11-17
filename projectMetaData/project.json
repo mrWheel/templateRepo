@@ -2,12 +2,12 @@
   "name": "your_project_name",
   "long_name_nl": "Langere naam van uw project in het Nederlands",
   "long_name_en": "Longer name of your project in English",
-  "description_en": "Add here a description of approximately 500 words explaining this project in English",
-  "description_nl": "Voeg hier een beschrijving van ongeveer 500 woorden in die dit project in het Nederlands uitlegt",
+  "description_en": "Add here a description of approximately 50 words explaining this project in English",
+  "description_nl": "Voeg hier een beschrijving van ongeveer 50 woorden in die dit project in het Nederlands uitlegt",
   "github_url": "https://github.com/mrWheel/",
   "post_url": "https://willem.aandewiel.nl/",
   "version": "1.0.0",
-  "author": "Your Name",
+  "author": "Willem Aandewiel (mrWheel)",
   "license": "MIT",
   "image": "thisProject.png"
 }
